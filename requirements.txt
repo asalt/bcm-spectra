@@ -1,0 +1,10 @@
+lxml
+numpy
+pandas
+pyteomics
+spectrum_utils
+pandas
+matplotlib
+altair
+# SQLAlchemy
+
