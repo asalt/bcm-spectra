@@ -1,0 +1,2 @@
+[console_scripts]
+bcm_spectra = bcm_spectra.cli:main
