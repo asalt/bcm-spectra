@@ -1,6 +1,0 @@
-__init__
-cli
-db
-parser
-plot
-utils

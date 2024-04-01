@@ -1,6 +1,0 @@
-numpy
-pandas
-matplotlib
-pyteomics
-spectrum_utils
-tqdm
