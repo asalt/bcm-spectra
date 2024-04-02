@@ -201,31 +201,31 @@ def get_files(base_filenames):
     return results
 
 
-def main(targetfile: str, searchdir: str):
-    """
-    :param targetfile: str: path to the target csv file that contains the survey scan number, fragment scan number, and spectrum file
-    :param searchdir: str: path to the directory where the mzML and pepXML files are located
-    """
-    df = pd.read_csv(targetfile)
-    df = check_cols(df)
-    base_filenames = df.SpectrumFile.unique()
-    files = get_files(base_filenames, searchdir=searchdir)
-
-    for file in files:
-        fileinfo = files[file]
-        mzml_files = fileinfo.get('mzml_files')
-        pepxml_files = fileinfo.get('pepxml_files')
-        mzml_file = mzml_files[0]
-        pepxml_file = pepxml_files[0]
-
-
-
-        scaninfo = df[ df.SpectrumFile == file ]
-        targetscans = scaninfo.FragScanNumber.tolist()
-
-        scans = get_scans_from_files(mzml_file, pepxml_file, targetscans=targetscans)
-
-
+# def main(targetfile: str, searchdir: str):
+#     """
+#     :param targetfile: str: path to the target csv file that contains the survey scan number, fragment scan number, and spectrum file
+#     :param searchdir: str: path to the directory where the mzML and pepXML files are located
+#     """
+#     df = pd.read_csv(targetfile)
+#     df = check_cols(df)
+#     base_filenames = df.SpectrumFile.unique()
+#     files = get_files(base_filenames, searchdir=searchdir)
+#
+#     for file in files:
+#         fileinfo = files[file]
+#         mzml_files = fileinfo.get('mzml_files')
+#         pepxml_files = fileinfo.get('pepxml_files')
+#         mzml_file = mzml_files[0]
+#         pepxml_file = pepxml_files[0]
+#
+#
+#
+#         scaninfo = df[ df.SpectrumFile == file ]
+#         targetscans = scaninfo.FragScanNumber.tolist()
+#
+#         scans = get_scans_from_files(mzml_file, pepxml_file, targetscans=targetscans)
+#
+#
 
 def get_scans_from_files(mzml_file, pepxml_file, targetscans=None):
     """

@@ -11,6 +11,7 @@ from pyteomics import mzml, pepxml
 from pyteomics import mass
 import spectrum_utils
 from matplotlib import gridspec
+import click
 
 import spectrum_utils.spectrum as sus
 import spectrum_utils.plot as sup
@@ -21,7 +22,8 @@ import altair as alt
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
-from src.utils import get_files
+from .src.utils import get_files
+from .src import parser
 
 
 logger = logging.getLogger(__name__)
@@ -35,29 +37,7 @@ def check_cols(df):
     return df
 
 
-def get_scan_info(df, files):
-    df.SpectrumFile.unique()
 
-# def parse_mzml_file(mzml_files):
-#     # This function will return a dictionary with scan number as key
-#     # and the parsed mzML information as values
-#     mzml_info = {}
-#     for mzml_file in mzml_files:
-#         with mzml.MzML(mzml_file) as reader:
-#             for spectrum in reader:
-#                 scan_number = spectrum['id']
-#                 mzml_info[scan_number] = spectrum
-#     return mzml_info
-#
-# def parse_pepxml_files(pepxml_files):
-#     # Similar to parse_mzml_files, return a dictionary with scan number as key
-#     pepxml_info = {}
-#     for pepxml_file in pepxml_files:
-#         with pepxml.read(pepxml_file) as reader:
-#             for psm in reader:
-#                 scan_number = psm['start_scan']
-#                 pepxml_info[scan_number] = psm
-#     return pepxml_info
 
 annotation_settings = {
     "fragment_tol_mass": 0.05,
@@ -246,25 +226,8 @@ def make_table_altair(table_data):
     return text_chart
 
 
-import click
-
-@click.command()
-@click.option('--file', help='path to the target csv file that contains the survey scan number, fragment scan number, and spectrum file')
-def main(file):
-    # example
-    file = "./Sites_AssigmentVerification.csv"
-    df = pd.read_csv(file)
-    check_cols(df)
-
-
-    spec_file_basenames = df.SpectrumFile.unique()
-    files = get_files(spec_file_basenames)
-
-    # move out later
-    list_of_dicts = df.to_dict(orient='records')
-
-
-    scans = defaultdict(dict)
+def get_filescans(files, df):
+    filescans = defaultdict()
     # mzml_info = parse_mzml_files(files['53640_1_EXP_MCF7_EGFRa_LF_phos']['mzml_files'])
     # pepxml_info = parse_mzml_files(files['53640_1_EXP_MCF7_EGFRa_LF_phos']['pepxml_files'])
 
@@ -279,20 +242,52 @@ def main(file):
         pepxml_file = pepxml_files[0]
 
         logger.info(f"processing {mzml_file} and {pepxml_file}")
+        scans = parser.get_scans_from_files(mzml_file, pepxml_file, targetscans=targetscans)
 
-        with mzml.MzML(mzml_file.__str__()) as reader:
-            for spectrum in tqdm(reader):
-                scan_number = spectrum['index'] + 1
-                if scan_number in targetscans:
-                    print(f"got scan {scan_number}")
-                    scans[scan_number]['mzml'] = spectrum
+        filescans[file] = scans
 
-        with pepxml.PepXML(pepxml_file.__str__()) as reader:
-            for spectrum in tqdm(reader):
-                scan_number = spectrum['start_scan']
-                if scan_number in targetscans:
-                    print(f"got scan {scan_number}")
-                    scans[scan_number]['pepxml'] = spectrum
+
+
+
+@click.command()
+@click.option('--file', help='path to the target csv file that contains the survey scan number, fragment scan number, and spectrum file')
+def main(file):
+    """
+    :param file: path to the target csv file that contains the survey scan number, fragment scan number, and spectrum file
+    percisely the columns are 'SurveyScanNumber', 'FragScanNumber', 'SpectrumFile'
+    """
+    # example
+    file = "./Sites_AssigmentVerification.csv"
+    df = pd.read_csv(file)
+    check_cols(df)
+
+    # move out later
+    list_of_dicts = df.to_dict(orient='records')
+
+
+    spec_file_basenames = df.SpectrumFile.unique()
+
+    files = get_files(spec_file_basenames)
+
+    #scans = defaultdict(dict)
+    filescans = get_filescans(files, df)
+
+    # all the scans are in this filescans dictionary object
+    # the structure is
+    # filescans = {
+    #     '53640_1_EXP_MCF7_EGFRa_LF_phos':
+    #         {'mzml': mzml_obj, 'pepxml': pepxml_obj},
+    #         ...
+    #     },
+    #     '53640_2_EXP_MCF7_EGFRa_LF_phos':
+    #         {'mzml': mzml_obj, 'pepxml': pepxml_obj},
+    #         ...
+    #     },
+    #     ...
+    # } # double check if this is right. need to make tests
+    # for each scan in each file, we can now handle the scan
+    # for example
+
 
     for ix, scan in scans.items():
         #break
