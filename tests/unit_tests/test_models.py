@@ -12,8 +12,16 @@ def session():
     #engine = create_engine('sqlite:///:memory:')  # Use an in-memory SQLite database for tests
     engine = create_engine('sqlite:///test_db.db')  # Use an in-memory SQLite database for tests
     Base.metadata.create_all(engine)
-    Session = sessionmaker(bind=engine)
-    return Session()
+    Session = sessionmaker(bind=engine)()
+    yield Session
+    Session.close()
+
+@pytest.fixture()
+def run(session):
+    run = Run(filename="test_run")
+    session.add(run)
+    session.commit()
+    return run
 
 def test_scan_insertion(session):
     run = Run(filename="test_run")
@@ -23,21 +31,25 @@ def test_scan_insertion(session):
     assert session.query(Run).filter_by(filename="test_run").first() is not None
 
 
-def test_binary_store(session):
+def test_binary_store(session, run):
+
+    # filename = "test_binary_store"
+    # run = Run(filename=filename)
+    filename = run.filename
+
+    assert run is not None
+    # we already have session and run
+    # now we add scan to the run
 
     mz_array = np.array([1.0, 2.0, 3.0], dtype=np.float32)
     intensity_array = np.array([1.0, 2.0, 3.0], dtype=np.float64)
-    filename = "test_binary_store"
-
-    run = Run(filename=filename)
     scan = Scan(scan_number=123, ms_level=2, run=run,
                 mz_array=mz_array.tobytes(),
                 intensity_array=intensity_array.tobytes())
     session.add(scan)
     session.commit()
 
-    run = session.query(Run).filter_by(filename=filename).first()
-    assert run is not None
+    # run = session.query(Run).filter_by(filename=filename).first()
 
     scans = run.scans
 
@@ -50,6 +62,7 @@ def test_binary_store(session):
 
     with pytest.raises(ValueError):
         mz_array_decoded_wrong = np.frombuffer(scan.mz_array, dtype=np.float64)
+
     intensity_array_decoded = np.frombuffer(scan.intensity_array, dtype=np.float64)
 
 
