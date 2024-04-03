@@ -22,8 +22,8 @@ import altair as alt
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
-from .src.utils import get_files
-from .src import parser
+from .utils import get_files, get_filescans
+from . import parser
 
 
 logger = logging.getLogger(__name__)
@@ -226,38 +226,19 @@ def make_table_altair(table_data):
     return text_chart
 
 
-def get_filescans(files, df):
-    filescans = defaultdict()
-    # mzml_info = parse_mzml_files(files['53640_1_EXP_MCF7_EGFRa_LF_phos']['mzml_files'])
-    # pepxml_info = parse_mzml_files(files['53640_1_EXP_MCF7_EGFRa_LF_phos']['pepxml_files'])
-
-    for file in files.keys():
-        scaninfo = df[ df.SpectrumFile == file ]
-        mzml_files = files[file]['mzml_files']
-        pepxml_files = files[file]['pepxml_files']
-        # TODO fix for if there is more than one file # or maybe not necessary if basefilename is unique by fraction (believe it should be)
-
-        targetscans = scaninfo.FragScanNumber.tolist()
-        mzml_file = mzml_files[0]
-        pepxml_file = pepxml_files[0]
-
-        logger.info(f"processing {mzml_file} and {pepxml_file}")
-        scans = parser.get_scans_from_files(mzml_file, pepxml_file, targetscans=targetscans)
-
-        filescans[file] = scans
-
-
 
 
 @click.command()
+@click.option('--data-dir', help='data directory where the mzML and pepXML files are located')
 @click.option('--file', help='path to the target csv file that contains the survey scan number, fragment scan number, and spectrum file')
-def main(file):
+def main(data_dir,
+         file):
     """
     :param file: path to the target csv file that contains the survey scan number, fragment scan number, and spectrum file
     percisely the columns are 'SurveyScanNumber', 'FragScanNumber', 'SpectrumFile'
     """
     # example
-    file = "./Sites_AssigmentVerification.csv"
+    #file = "./Sites_AssigmentVerification.csv"
     df = pd.read_csv(file)
     check_cols(df)
 
@@ -267,8 +248,8 @@ def main(file):
 
     spec_file_basenames = df.SpectrumFile.unique()
 
-    files = get_files(spec_file_basenames)
-
+    import ipdb; ipdb.set_trace()
+    files = get_files(spec_file_basenames, basepath=data_dir)
     #scans = defaultdict(dict)
     filescans = get_filescans(files, df)
 
@@ -289,7 +270,7 @@ def main(file):
     # for example
 
 
-    for ix, scan in scans.items():
+    for ix, scan in filescans.items():
         #break
         handle_scan(scan)
 

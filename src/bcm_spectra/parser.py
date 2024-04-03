@@ -44,13 +44,6 @@ def check_cols(df):
 #                                       pepxml_files = pepxml_files)
 #     return results
 
-def get_files(base_filenames: List[str], searchdir=".") -> Dict[str, Dict[str, List[Path]]]:
-    results: Dict[str, Dict[str, List[Path]]] = {}
-    for base_filename in base_filenames:
-        mzml_files = list(Path(searchdir).rglob(f'{base_filename}*.mzML'))
-        pepxml_files = list(Path(searchdir).rglob(f'{base_filename}*.pepXML'))
-        results[base_filename] = {'mzml_files': mzml_files, 'pepxml_files': pepxml_files}
-    return results
 
 annotation_settings = {
     "fragment_tol_mass": 0.05,
@@ -191,14 +184,6 @@ def check_cols(df):
     assert "SpectrumFile" in df.columns
     return df
 
-def get_files(base_filenames):
-    results = dict()
-    for base_filename in base_filenames:
-        mzml_files = list(Path('.').rglob(f'{base_filename}*.mzML'))
-        pepxml_files = list(Path('.').rglob(f'{base_filename}*.pepXML'))
-        results[base_filename] = dict(mzml_files = mzml_files,
-                                      pepxml_files = pepxml_files)
-    return results
 
 
 # def main(targetfile: str, searchdir: str):
@@ -227,6 +212,7 @@ def get_files(base_filenames):
 #
 #
 
+
 def get_scans_from_files(mzml_file, pepxml_file, targetscans=None):
     """
     :param fileinfo: dict: dictionary containing the mzml_files and pepxml_files
@@ -237,6 +223,9 @@ def get_scans_from_files(mzml_file, pepxml_file, targetscans=None):
     scans = defaultdict(dict)
 
     with mzml.MzML(mzml_file.__str__()) as reader:
+
+        logger.info(f"processing {mzml_file}")
+
         for spectrum in tqdm(reader):
             scan_number = spectrum['index'] + 1
             if scan_number in targetscans:
@@ -244,6 +233,9 @@ def get_scans_from_files(mzml_file, pepxml_file, targetscans=None):
                 scans[scan_number]['mzml'] = spectrum
 
     with pepxml.PepXML(pepxml_file.__str__()) as reader:
+
+        logger.info(f"processing {pepxml_file}")
+
         for spectrum in tqdm(reader):
             scan_number = spectrum['start_scan']
             if scan_number in targetscans:
