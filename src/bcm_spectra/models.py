@@ -71,23 +71,33 @@ class Precursor(Base):
 class Fragment(Base):
     __tablename__ = 'fragments'
     id = Column(Integer, primary_key=True)
-    scan_id = Column(Integer, ForeignKey('scans.id'))
     # mz = Column(Float)
     # intensity = Column(Float)
 
     precursor_id = Column(Integer, ForeignKey('precursors.id'))
     precursor = relationship("Precursor", backref="fragments")
 
-    search_results = relationship("SearchResult", backref="fragments")
+    scan_id = Column(Integer, ForeignKey('scans.id'))
+    scan = relationship("Scan", backref="fragments")
+
+    # search_results = relationship("SearchResult", backref="fragments")
 
 class SearchResult(Base):
     __tablename__ = 'search_results'
     id = Column(Integer, primary_key=True)
     peptide_sequence = Column(String)
-    score = Column(Float)
-    modifications = Column(JSON)
-    scan_id = Column(Integer, ForeignKey('scans.id'))
-    scan = relationship("Scan", backref="search_results")
+    proforma_sequence = Column(String)
+    rank = Column(Integer)
+
+    score = Column(JSON)
+    mass_shifts = Column(JSON)
+    mass_diffs = Column(JSON)
+
+
+
     # fragment_id = relationship("Fragment", backref="search_results")
 
+    scan = relationship("Scan", backref="search_results")
+    scan_id = Column(Integer, ForeignKey('scans.id'))
+    fragment = relationship("Fragment", backref="search_results")
     fragment_id = Column(Integer, ForeignKey('fragments.id'))

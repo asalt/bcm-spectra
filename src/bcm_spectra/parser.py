@@ -1,6 +1,7 @@
 # parser.py
 
 import os
+import re
 from collections import defaultdict
 from typing import List, Dict
 from pathlib import Path
@@ -25,6 +26,9 @@ import altair as alt
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+
+
+from . import models
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -97,13 +101,32 @@ def extract_ion_annotation(msms: spectrum_utils.spectrum.MsmsSpectrum):
 
 
 
-def handle_scan(scan: dict):
+
+def prepare_ms2_objects(scan: dict, runobj=None):
+    """
+    this is for ms2 scans mzml and pepxml
+    scan is a dictionary with keys 'mzml' and 'pepxml'
+    """
 
     mzmlobj = scan.get('mzml')
     pepxmlobj = scan.get('pepxml')
+    # ==
+
+    if mzmlobj is None:
+        logger.error("mzmlobj not present")
+        raise ValueError("mzmlobj not present")
+
+    if pepxmlobj is None:
+        logger.error("pepxmlobj not present")
+        raise ValueError("pepxmlobj not present")
+
+    if runobj is None:
+        logger.error("runobj not present")
+        raise ValueError("runobj not present")
+
 
     if not mzmlobj['ms level'] == 2:
-        print(f"scan['id'] not msms")
+        print(f"scan not msms")
         return
 
 
@@ -113,15 +136,56 @@ def handle_scan(scan: dict):
     scanno = mzmlobj['index'] + 1 # concat other info to make more comprehensive
     start_scan = pepxmlobj['start_scan']
 
-    assert scanno == start_scan
-    assert mzmlobj['precursorList']['count'] == 1
 
+    assert scanno == start_scan
+    #
+
+
+    assert mzmlobj['precursorList']['count'] == 1
     precursor = mzmlobj['precursorList']['precursor'][0]
-    precursor_id = precursor['spectrumRef']
+
+    specref = precursor['spectrumRef']
+    _precursor_id_regex = re.match(r'.*scan=(\d+)', specref)
+    if _precursor_id_regex is None:
+        raise ValueError(f"precursor id not found in {specref}")
+    precursor_id = _precursor_id_regex.group(1)
+
+
     selected_ion = precursor['selectedIonList']['selectedIon'][0]
     precursor_mz = selected_ion['selected ion m/z']
     precursor_charge = selected_ion['charge state']
+    precursor_intensity = selected_ion['peak intensity']
 
+
+    scanobj = models.Scan(
+        scan_number = scanno,
+        ms_level = 2,
+        mz_array = mzarray,
+        intensity_array = intensityarray,
+        run = runobj
+    )
+
+
+    fragmentobj = models.Fragment(
+        id = scanno,
+        scan = scanobj,
+    )
+
+
+
+    search_hits = pepxmlobj['search_hit']
+
+    search_hit_objects = list()
+    for search_hit in search_hits:
+        search_hit_obj = process_search_hit(search_hit)
+        search_hit_obj.scan = scanobj
+        search_hit_obj.fragment = fragmentobj
+        search_hit_objects.append(search_hit_obj)
+
+
+    return {'scan' : scanobj, 'fragment' : fragmentobj, 'search_hits' : search_hit_objects}
+
+def process_search_hit(search_hit):
 
     def get_massdiff():
         out = dict()
@@ -129,10 +193,45 @@ def handle_scan(scan: dict):
             aa = modifications_aa[ix]
             if aa not in mass.std_aa_mass:
                 ValueError(f"aa {aa} not in mass.std_aa_mass")
-            massdiff = modifications[ix] - mass.std_aa_mass.get(aa, 0)
+            massdiff = mass_shift_dict[ix] - mass.std_aa_mass.get(aa, 0)
             out[ix] = massdiff
         return out
 
+    hit_rank = search_hit['hit_rank']
+    hit_massdiff = search_hit['massdiff']
+
+    peptide = search_hit['peptide']
+    mass_shift_dict = {mod['position']: mod['mass'] for mod in search_hit['modifications']}
+    modifications_aa = {k: peptide[k-1]  for k in mass_shift_dict.keys()}  #1 based index
+    massdiff_dict = get_massdiff()
+    rank = search_hit['hit_rank']
+    score = search_hit['search_score'] # a dictionary {'hyperscore': float, 'next_score': float, 'expect': float}
+
+    proforma_sequence = ''
+    for i, aa in enumerate(peptide, start=1):
+        proforma_sequence += aa
+        if i in massdiff_dict:
+            # Add the modification in square brackets
+            mass_diff = massdiff_dict[i]
+            proforma_sequence += f'[+{mass_diff:.4f}]'
+
+
+
+    search_hit_obj = models.SearchResult(
+        peptide_sequence = peptide,
+        proforma_sequence = proforma_sequence,
+        rank = rank,
+        score = score,
+        mass_shifts = mass_shift_dict,
+        mass_diffs = massdiff_dict,
+    )
+
+
+    return search_hit_obj
+
+
+
+def other():
 
     search_hits = pepxmlobj['search_hit']
 
@@ -213,7 +312,7 @@ def check_cols(df):
 #
 
 
-def get_scans_from_files(mzml_file, pepxml_file, targetscans=None):
+def get_scans_from_files(mzml_file, pepxml_file, targetscans=None, _all=False):
     """
     :param fileinfo: dict: dictionary containing the mzml_files and pepxml_files
     :param targetscans: list: list of scan numbers to extract. MS2 only right now
@@ -221,6 +320,9 @@ def get_scans_from_files(mzml_file, pepxml_file, targetscans=None):
     logger.info(f"processing {mzml_file} and {pepxml_file}")
 
     scans = defaultdict(dict)
+
+    mzmlinfo = dict()
+    pepxmlinfo = dict()
 
     with mzml.MzML(mzml_file.__str__()) as reader:
 
@@ -230,7 +332,11 @@ def get_scans_from_files(mzml_file, pepxml_file, targetscans=None):
             scan_number = spectrum['index'] + 1
             if scan_number in targetscans:
                 print(f"got scan {scan_number}")
-                scans[scan_number]['mzml'] = spectrum
+                #scans[scan_number]['mzml'] = spectrum
+                mzmlinfo[scan_number] = spectrum
+
+            if all([x in mzmlinfo for x in targetscans]) and not _all:
+                break
 
     with pepxml.PepXML(pepxml_file.__str__()) as reader:
 
@@ -240,6 +346,15 @@ def get_scans_from_files(mzml_file, pepxml_file, targetscans=None):
             scan_number = spectrum['start_scan']
             if scan_number in targetscans:
                 print(f"got scan {scan_number}")
-                scans[scan_number]['pepxml'] = spectrum
+                #scans[scan_number]['pepxml'] = spectrum
+                pepxmlinfo[scan_number] = spectrum
+
+            if all([x in pepxmlinfo for x in targetscans]) and not _all:
+                break
+
+    for key in mzmlinfo:
+        scans[key]['mzml'] = mzmlinfo[key]
+    for key in pepxmlinfo:
+        scans[key]['pepxml'] = pepxmlinfo[key]
 
     return scans

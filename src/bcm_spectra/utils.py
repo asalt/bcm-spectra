@@ -8,7 +8,13 @@ import logging
 from pathlib import Path
 
 
+import sqlalchemy
+from sqlalchemy.orm import Session
+
 from . import parser
+from . import db
+from . import models
+from . import crud
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -32,13 +38,79 @@ def get_files(base_filenames, basepath=".") -> dict:
 #     return results
 
 
-def get_filescans(files, df) -> dict:
+def get_filescans(mzml_file, pepxml_file, session=None, runobj=None, targetscans=None):
+    """
+    here is logic for fetching scan data from db if present, else fetch from files and save to db
+    this is for ms2 scans
+    note this gets scan info AND SearchEngine info
+    multimodal creation
+    """
+
+    logger.info(f"processing {mzml_file} and {pepxml_file}")
+
+    # note here we can calculate the UID for each scan query, check in db for presence of data,
+    # if not we use parser.get_scans_from_files to get the data
+    # then insert into db
+
+    if session is None:
+        raise ValueError("session not provided")
+        # session = db.get_session()
+
+
+    if runobj is None:
+        logger.warning("runobj not present")
+
+    scans = dict()
+
+    for targetscan in targetscans:
+        # scan = crud.get_scan_from_run_by_scan_number(runobj, targetscan)
+        scan = crud.get_scan_from_run_by_scan_number(session=session, run=runobj, scan_number=targetscan)
+        logger.info(f"looking for {targetscan} in db")
+        if scan is not None:
+            logger.info(f"fetching scan {targetscan} from db")
+            scans[targetscan] = scan
+
+    missing_scans = set(targetscans) - set(scans.keys())
+
+    missing_scans_res = parser.get_scans_from_files(mzml_file, pepxml_file, targetscans=missing_scans)
+    # this takes a while
+    # no scans are saved to db until after all scans are processed
+    # this could be changed / modified
+
+    new_obj_collection = list()
+
+    for scan in missing_scans_res.values():
+        # actually we make new Scan objects here
+        new_objs = parser.prepare_ms2_objects(scan, runobj=runobj)
+        new_obj_collection.append(new_objs)
+
+    # scans.update(missing_scans_res)
+
+    import ipdb; ipdb.set_trace()
+    # add new scans to db
+    for new_objs in new_obj_collection:
+        for objname, obj in new_objs.items():
+            if isinstance(obj, models.Base):
+                session.add(obj)
+            else:
+                for o in obj: # this is for search hits.
+                    session.add(o)
+            #
+    session.commit()
+
+
+    return scans
+
+
+def get_all_filescans(files, df, session: Session) -> dict:
     filescans = defaultdict()
     # mzml_info = parse_mzml_files(files['53640_1_EXP_MCF7_EGFRa_LF_phos']['mzml_files'])
     # pepxml_info = parse_mzml_files(files['53640_1_EXP_MCF7_EGFRa_LF_phos']['pepxml_files'])
-
     for file in files.keys():
-        scaninfo = df[ df.SpectrumFile == file ]
+
+        runobj = crud.get_or_create_run(filename=file, session=session)
+
+
         mzml_files = files[file]['mzml_files']
         pepxml_files = files[file]['pepxml_files']
         # TODO fix for if there is more than one file # or maybe not necessary if basefilename is unique by fraction (believe it should be)
@@ -48,26 +120,24 @@ def get_filescans(files, df) -> dict:
         if len(pepxml_files) == 0:
             logger.error(f"no pepxml file found for {file}")
             continue
-
         # I believe this will not happen as basefilename should be unique by fraction & run
-
         if len(mzml_files) > 1:
             logger.warning(f"more than one mzml file found for {file}")
         if len(pepxml_files) > 1:
             logger.warning(f"more than one pepxml file found for {file}")
-
-        targetscans = scaninfo.FragScanNumber.tolist()
-
         mzml_file = mzml_files[0]
         pepxml_file = pepxml_files[0]
 
-        logger.info(f"processing {mzml_file} and {pepxml_file}")
-        # note here we can calculate the UID for each scan query, check in db for presence of data,
-        # if not we use parser.get_scans_from_files to get the data
-        # then insert into db
-        scans = parser.get_scans_from_files(mzml_file, pepxml_file, targetscans=targetscans)
+        scaninfo = df[ df.SpectrumFile == file ]
+        targetscans = scaninfo.FragScanNumber.tolist()
 
-        filescans[file] = scans
+        scans_for_file = get_filescans(mzml_file, pepxml_file, session=session,
+        runobj=runobj,
+                                        targetscans=targetscans)
+
+        filescans[file] = scans_for_file
+
+
 
     return filescans
 

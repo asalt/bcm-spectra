@@ -23,6 +23,8 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 
 from .utils import get_files, get_filescans
+from . import db
+from . import utils
 from . import parser
 
 
@@ -231,8 +233,11 @@ def make_table_altair(table_data):
 @click.command()
 @click.option('--data-dir', help='data directory where the mzML and pepXML files are located')
 @click.option('--file', help='path to the target csv file that contains the survey scan number, fragment scan number, and spectrum file')
+@click.option('--sqlite-db', help='path to the sqlite database', default='scans.db')
 def main(data_dir,
-         file):
+         file,
+         sqlite_db,
+         ):
     """
     :param file: path to the target csv file that contains the survey scan number, fragment scan number, and spectrum file
     percisely the columns are 'SurveyScanNumber', 'FragScanNumber', 'SpectrumFile'
@@ -240,6 +245,7 @@ def main(data_dir,
     # example
     #file = "./Sites_AssigmentVerification.csv"
     df = pd.read_csv(file)
+    df = df.head(1)
     check_cols(df)
 
     # move out later
@@ -248,10 +254,15 @@ def main(data_dir,
 
     spec_file_basenames = df.SpectrumFile.unique()
 
-    import ipdb; ipdb.set_trace()
-    files = get_files(spec_file_basenames, basepath=data_dir)
+    if sqlite_db is None:
+        raise NotImplementedError("sqlite db required")
+    if sqlite_db:
+        engine_url = f"sqlite:///{sqlite_db}"
+        session = db.get_global_session(engine_url)
+
+    files = utils.get_files(spec_file_basenames, basepath=data_dir)
     #scans = defaultdict(dict)
-    filescans = get_filescans(files, df)
+    filescans = utils.get_all_filescans(files, df, session=session)
 
     # all the scans are in this filescans dictionary object
     # the structure is
@@ -270,9 +281,9 @@ def main(data_dir,
     # for example
 
 
-    for ix, scan in filescans.items():
-        #break
-        handle_scan(scan)
+    # for ix, scan in filescans.items():
+    #     #break
+    #     handle_scan(scan)
 
 
 
