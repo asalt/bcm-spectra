@@ -25,6 +25,8 @@ import spectrum_utils.iplot as supi
 from tqdm import tqdm
 import altair as alt
 
+import numpy as np
+
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
@@ -133,11 +135,14 @@ def prepare_ms2_objects(scan: dict, runobj=None):
         print(f"scan not msms")
         return
 
-    mzarray = mzmlobj["m/z array"]
-    intensityarray = mzmlobj["intensity array"]
+    mz_array = mzmlobj["m/z array"]
+    mz_array = mz_array.astype(np.float64)  # keep both the same
+    intensity_array = mzmlobj["intensity array"]
     _name = mzmlobj["id"]  # concat other info to make more comprehensive
     scanno = mzmlobj["index"] + 1  # concat other info to make more comprehensive
     start_scan = pepxmlobj["start_scan"]
+
+    rt_seconds = pepxmlobj['retention_time_sec']
 
     assert scanno == start_scan
     #
@@ -159,15 +164,20 @@ def prepare_ms2_objects(scan: dict, runobj=None):
     scanobj = models.Scan(
         scan_number=scanno,
         ms_level=2,
-        mz_array=mzarray,
-        intensity_array=intensityarray,
+        rt_seconds=rt_seconds,
+        mz_array=mz_array.tobytes(),
+        intensity_array=intensity_array.tobytes(),
         run=runobj,
     )
 
+    import ipdb; ipdb.set_trace()
     fragmentobj = models.Fragment(
         id=scanno,
         run=runobj,
         scan=scanobj,
+        precursor_mz=precursor_mz,
+        precursor_intensity=precursor_intensity,
+        precursor_charge=precursor_charge,
     )
 
     search_hits = pepxmlobj["search_hit"]
@@ -211,6 +221,8 @@ def process_search_hit(search_hit):
         "search_score"
     ]  # a dictionary {'hyperscore': float, 'next_score': float, 'expect': float}
 
+    massdiff = search_hit["massdiff"]
+
     proforma_sequence = ""
     for i, aa in enumerate(peptide, start=1):
         proforma_sequence += aa
@@ -224,6 +236,7 @@ def process_search_hit(search_hit):
         proforma_sequence=proforma_sequence,
         rank=rank,
         score=score,
+        mass_error=massdiff,
         mass_shifts=mass_shift_dict,
         mass_diffs=massdiff_dict,
     )
@@ -231,7 +244,7 @@ def process_search_hit(search_hit):
     return search_hit_obj
 
 
-def other():
+def old():
 
     search_hits = pepxmlobj["search_hit"]
 

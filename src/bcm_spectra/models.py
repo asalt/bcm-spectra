@@ -63,6 +63,8 @@ class Scan(Base):
     id = Column(Integer, primary_key=True)
     scan_number = Column(Integer, nullable=False)
 
+    rt_seconds = Column(Float)
+
     ms_level = Column(Integer)
     mz_array = Column(LargeBinary)  # this actually a blob we need to define encoding
     intensity_array = Column(
@@ -82,6 +84,12 @@ class Scan(Base):
 
 
 class Precursor(Base):
+    """
+    TODO: this needs to be renamed to SurveyScan
+    we are not making an entire table for Precursor selected ion info -
+    # that information is stored in the fragments table
+    # this is for survey scans
+    """
     __tablename__ = "precursors"
     id = Column(Integer, primary_key=True)
     mz = Column(Float)
@@ -103,6 +111,9 @@ class Fragment(Base):
     id = Column(Integer, primary_key=True)
     # mz = Column(Float)
     # intensity = Column(Float)
+    precursor_mz = Column(Float)
+    precursor_intensity = Column(Float)
+    precursor_charge = Column(Integer)
 
     run_id = Column(Integer, ForeignKey("runs.id"))
     run = relationship("Run", back_populates="fragments")
@@ -124,6 +135,7 @@ class SearchResult(Base):
     rank = Column(Integer)
 
     score = Column(JSON)
+    mass_error = Column(Float)
     mass_shifts = Column(JSON)
     mass_diffs = Column(JSON)
 

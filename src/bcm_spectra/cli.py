@@ -11,22 +11,25 @@ import pandas as pd
 from pyteomics import mzml, pepxml
 from pyteomics import mass
 import spectrum_utils
-from matplotlib import gridspec
 import click
 
+import numpy as np
+
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+from matplotlib import gridspec
 import spectrum_utils.spectrum as sus
 import spectrum_utils.plot as sup
 import spectrum_utils.iplot as supi
 from tqdm import tqdm
 import altair as alt
 
-import matplotlib.pyplot as plt
-import matplotlib as mpl
 
 from .utils import get_files, get_filescans
 from . import db
 from . import utils
 from . import parser
+from . import plot
 
 
 logger = logging.getLogger(__name__)
@@ -196,43 +199,6 @@ def handle_scan(scan: dict):
             final_chart.interactive().save(fulloutname)
 
 
-def make_table_mpl(ax, table_data):
-    ax.axis("tight")
-    ax.axis("off")
-    # table = ax.table(cellText=table_data.values, colLabels=table_data.columns, loc='center', cellLoc='center')
-    table = ax.table(
-        cellText=table_data.values,
-        colLabels=table_data.columns,
-        loc="center",
-        cellLoc="center",
-        fontsize=12,
-        colWidths=[0.1, 0.1, 0.1],
-    )
-    return table
-
-
-def make_table_altair(table_data):
-    # not using this right now
-    # Convert the DataFrame to a long format
-    table_data_long = table_data.melt(var_name="Column", value_name="Text")
-
-    # Creating a "table" using text marks
-    text_chart = (
-        alt.Chart(table_data_long)
-        .mark_text(align="left", baseline="middle", dx=5)
-        .encode(
-            y=alt.Y("Column:N", axis=alt.Axis(title="")),
-            x=alt.X("row_number:O", axis=alt.Axis(title=""), sort=None),
-            text="Text:N",
-            detail="Column:N",
-        )
-        .transform_window(row_number="row_number()")
-        .transform_filter(
-            alt.datum.Column
-            != "Column"  # Optional filter if you have a 'Column' column
-        )
-    )
-    return text_chart
 
 
 @click.command()
@@ -278,6 +244,56 @@ def main(
 
     # this can be moved to test
     assert all( not isinstance(q, dict) for v in filescans.values() for q in v.values() )
+
+
+    for ix, scan_mapping in filescans.items():
+        for scanno, scan in scan_mapping.items():
+            1+1
+            # do something
+            # handle_scan(scan)
+
+
+            fragments = scan.fragments
+            if len(fragments) == 0:
+                logger.warning(f"no fragments found for scan {scanno}")
+                continue
+            fragment = fragments[0]
+            mz_array = np.frombuffer(fragment.scan.mz_array, dtype=np.float64)
+            intensity_array = np.frombuffer(fragment.scan.mz_array, dtype=np.float64)
+
+            assert len(mz_array) == len(intensity_array)
+
+            _name = f"{fragment.run.filename}_{fragment.scan.scan_number}_{fragment.precursor_charge}"
+
+            rt = scan.rt_seconds / 60
+
+            msms = sus.MsmsSpectrum( identifier=_name, precursor_mz=fragment.precursor_mz,
+                                     precursor_charge=fragment.precursor_charge, mz=mz_array, intensity=intensity_array,
+                 retention_time=rt,
+            )
+
+                # peptide = peptide,
+                # modifications = modifications
+            #)
+            import ipdb; ipdb.set_trace()
+
+            for search_result in fragment.search_results:
+                proforma_sequence = search_result.proforma_sequence
+                hit_rank = search_result.rank
+                scoreinfo = search_result.score # dict
+                # the "name" of the score may not be constant - not sure about others
+                search_score = scoreinfo.get("hyperscore", )
+                nextscore = scoreinfo.get("nextscore", )
+                mass_error = search_result.mass_error
+
+                info = (
+                    f"scan {scanno} {proforma_sequence}\n"
+                    f"hit rank: {hit_rank} massdiff: {mass_error:4f}\n"
+                    f"search score: {search_score}"
+                )
+                msms.annotate_proforma(proforma_sequence, **annotation_settings)
+                fig = plot.make_spectrum_plot(msms, proforma_sequence=proforma_sequence,
+                                         additional_info=info)
 
     # scanobj = filescans[ list(filescans.keys())[0] ].get(43816)
     # f1 = scanobj.fragments[0]
