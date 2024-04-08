@@ -1,4 +1,3 @@
-
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -7,14 +6,18 @@ import numpy as np
 
 from bcm_spectra.models import Base, Run, Scan, Precursor, SearchResult
 
+
 @pytest.fixture
 def session():
-    #engine = create_engine('sqlite:///:memory:')  # Use an in-memory SQLite database for tests
-    engine = create_engine('sqlite:///test_db.db')  # Use an in-memory SQLite database for tests
+    # engine = create_engine('sqlite:///:memory:')  # Use an in-memory SQLite database for tests
+    engine = create_engine(
+        "sqlite:///test_db.db"
+    )  # Use an in-memory SQLite database for tests
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)()
     yield Session
     Session.close()
+
 
 @pytest.fixture()
 def run(session):
@@ -22,6 +25,7 @@ def run(session):
     session.add(run)
     session.commit()
     return run
+
 
 def test_scan_insertion(session):
     run = Run(filename="test_run")
@@ -43,9 +47,13 @@ def test_binary_store(session, run):
 
     mz_array = np.array([1.0, 2.0, 3.0], dtype=np.float32)
     intensity_array = np.array([1.0, 2.0, 3.0], dtype=np.float64)
-    scan = Scan(scan_number=123, ms_level=2, run=run,
-                mz_array=mz_array.tobytes(),
-                intensity_array=intensity_array.tobytes())
+    scan = Scan(
+        scan_number=123,
+        ms_level=2,
+        run=run,
+        mz_array=mz_array.tobytes(),
+        intensity_array=intensity_array.tobytes(),
+    )
     session.add(scan)
     session.commit()
 
@@ -57,7 +65,6 @@ def test_binary_store(session, run):
 
     scan = scans[0]
 
-
     mz_array_decoded = np.frombuffer(scan.mz_array, dtype=np.float32)
 
     with pytest.raises(ValueError):
@@ -65,6 +72,4 @@ def test_binary_store(session, run):
 
     intensity_array_decoded = np.frombuffer(scan.intensity_array, dtype=np.float64)
 
-
     assert np.allclose(mz_array, mz_array_decoded)
-

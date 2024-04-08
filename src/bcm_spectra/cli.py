@@ -4,7 +4,8 @@ import os
 from collections import defaultdict
 import argparse
 import logging
-#import glob
+
+# import glob
 from pathlib import Path
 import pandas as pd
 from pyteomics import mzml, pepxml
@@ -39,8 +40,6 @@ def check_cols(df):
     return df
 
 
-
-
 annotation_settings = {
     "fragment_tol_mass": 0.05,
     "fragment_tol_mode": "Da",
@@ -50,34 +49,32 @@ annotation_settings = {
 }
 
 
+# def get_scan_info(df, scan_numbers)
 
-#def get_scan_info(df, scan_numbers)
 
 def handle_scan(scan: dict):
 
-    mzmlobj = scan.get('mzml')
-    pepxmlobj = scan.get('pepxml')
+    mzmlobj = scan.get("mzml")
+    pepxmlobj = scan.get("pepxml")
 
-    if not mzmlobj['ms level'] == 2:
+    if not mzmlobj["ms level"] == 2:
         print(f"scan['id'] not msms")
         return
 
-
-    mzarray = mzmlobj['m/z array']
-    intensityarray = mzmlobj['intensity array']
-    _name = mzmlobj['id'] # concat other info to make more comprehensive
-    scanno = mzmlobj['index'] + 1 # concat other info to make more comprehensive
-    start_scan = pepxmlobj['start_scan']
+    mzarray = mzmlobj["m/z array"]
+    intensityarray = mzmlobj["intensity array"]
+    _name = mzmlobj["id"]  # concat other info to make more comprehensive
+    scanno = mzmlobj["index"] + 1  # concat other info to make more comprehensive
+    start_scan = pepxmlobj["start_scan"]
 
     assert scanno == start_scan
-    assert mzmlobj['precursorList']['count'] == 1
+    assert mzmlobj["precursorList"]["count"] == 1
 
-    precursor = mzmlobj['precursorList']['precursor'][0]
-    precursor_id = precursor['spectrumRef']
-    selected_ion = precursor['selectedIonList']['selectedIon'][0]
-    precursor_mz = selected_ion['selected ion m/z']
-    precursor_charge = selected_ion['charge state']
-
+    precursor = mzmlobj["precursorList"]["precursor"][0]
+    precursor_id = precursor["spectrumRef"]
+    selected_ion = precursor["selectedIonList"]["selectedIon"][0]
+    precursor_mz = selected_ion["selected ion m/z"]
+    precursor_charge = selected_ion["charge state"]
 
     def get_massdiff():
         out = dict()
@@ -89,47 +86,48 @@ def handle_scan(scan: dict):
             out[ix] = massdiff
         return out
 
-
-    search_hits = pepxmlobj['search_hit']
+    search_hits = pepxmlobj["search_hit"]
 
     for search_hit in search_hits:
         # this has many many little ways to get tricked up. so many things to map
 
-        #dict_keys(['peptide', 'num_missed_cleavages', 'num_tot_proteins', 'tot_num_ions', 'hit_rank', 'num_matched_ions', 'search_score', 'modified_peptide', 'massdiff', 'calc_neutral_pep_mass', 'is_rejected', 'proteins', 'modifications'])
-        hit_rank = search_hit['hit_rank']
-        hit_massdiff = search_hit['massdiff']
+        # dict_keys(['peptide', 'num_missed_cleavages', 'num_tot_proteins', 'tot_num_ions', 'hit_rank', 'num_matched_ions', 'search_score', 'modified_peptide', 'massdiff', 'calc_neutral_pep_mass', 'is_rejected', 'proteins', 'modifications'])
+        hit_rank = search_hit["hit_rank"]
+        hit_massdiff = search_hit["massdiff"]
 
-        peptide = search_hit['peptide']
-        modifications = {mod['position']: mod['mass'] for mod in search_hit['modifications']}
-        modifications_aa = {k: peptide[k-1]  for k in modifications.keys()}  #1 based index
+        peptide = search_hit["peptide"]
+        modifications = {
+            mod["position"]: mod["mass"] for mod in search_hit["modifications"]
+        }
+        modifications_aa = {
+            k: peptide[k - 1] for k in modifications.keys()
+        }  # 1 based index
         massdiff_dict = get_massdiff()
 
-        proforma_sequence = ''
+        proforma_sequence = ""
         for i, aa in enumerate(peptide, start=1):
             proforma_sequence += aa
             if i in massdiff_dict:
                 # Add the modification in square brackets
                 mass_diff = massdiff_dict[i]
-                proforma_sequence += f'[+{mass_diff:.4f}]'
+                proforma_sequence += f"[+{mass_diff:.4f}]"
 
-        msms = sus.MsmsSpectrum(identifier = _name,
-                        precursor_mz = float(precursor_mz),
-                        precursor_charge = precursor_charge,
-                        mz = mzarray,
-                        intensity = intensityarray,
-                        retention_time = 1.,
-                        #peptide = peptide,
-                        #modifications = modifications
-                        )
+        msms = sus.MsmsSpectrum(
+            identifier=_name,
+            precursor_mz=float(precursor_mz),
+            precursor_charge=precursor_charge,
+            mz=mzarray,
+            intensity=intensityarray,
+            retention_time=1.0,
+            # peptide = peptide,
+            # modifications = modifications
+        )
 
-        msms.annotate_proforma(proforma_sequence,
-                               **annotation_settings
-                               )
+        msms.annotate_proforma(proforma_sequence, **annotation_settings)
 
         # fig, ax = plt.subplots()
         # sup.spectrum(msms, ax=ax, grid=False)
         msms_annot_table = extract_ion_annotation(msms)
-
 
         outpath = Path("./spectra")
         outpath.mkdir(exist_ok=True)
@@ -138,119 +136,131 @@ def handle_scan(scan: dict):
 
         fig = plt.figure(figsize=(14, 6))
         gs = gridspec.GridSpec(2, 2, height_ratios=[1, 1], width_ratios=[3, 1])
-        ax1 = fig.add_subplot(gs[0, 0]) # First row, first column
-        ax2 = fig.add_subplot(gs[1, 0]) # Second row, first column
-        ax3 = fig.add_subplot(gs[:, 1]) # Both rows, second column
-        ax3.axis('off')
+        ax1 = fig.add_subplot(gs[0, 0])  # First row, first column
+        ax2 = fig.add_subplot(gs[1, 0])  # Second row, first column
+        ax3 = fig.add_subplot(gs[:, 1])  # Both rows, second column
+        ax3.axis("off")
         sup.spectrum(msms, ax=ax1, grid=False)
         sup.mass_errors(msms, ax=ax2, plot_unknown=False)
-        table = pd.plotting.table(ax3, msms_annot_table, loc='center')
+        table = pd.plotting.table(ax3, msms_annot_table, loc="center")
         table.auto_set_font_size(True)
-        search_score = str(search_hit['search_score'])
-        title = (f"scan {scanno} {proforma_sequence}\n"
-                    f"hit rank: {hit_rank} massdiff: {hit_massdiff:4f}\n"
-                    f"search score: {search_score}"
-                    )
-        fig.suptitle(proforma_sequence, fontsize=16, weight='bold', color='black')
+        search_score = str(search_hit["search_score"])
+        title = (
+            f"scan {scanno} {proforma_sequence}\n"
+            f"hit rank: {hit_rank} massdiff: {hit_massdiff:4f}\n"
+            f"search score: {search_score}"
+        )
+        fig.suptitle(proforma_sequence, fontsize=16, weight="bold", color="black")
         fig.axes[0].title.set_text(title)
         table.set_fontsize(12)
 
-
-        #fig = sup.facet(
+        # fig = sup.facet(
         #    spec_top=msms,
 
         #    spec_mass_errors=msms,
         #    mass_errors_kws={"plot_unknown": False},
         #    height=7,
         #    width=10.5,
-        #)
-
+        # )
 
         plt.tight_layout()
         outname = f"scan_{scanno}_{peptide}_hit_{hit_rank}"
-        fulloutname = outpath.joinpath(outname+".png")
+        fulloutname = outpath.joinpath(outname + ".png")
         if not os.path.exists(fulloutname):
-            plt.savefig(fulloutname, dpi=300, bbox_inches='tight')
+            plt.savefig(fulloutname, dpi=300, bbox_inches="tight")
         plt.close(fig)
-
 
         # ============ altair chart
 
         achart = supi.spectrum(msms)
-        #achart.properties(width=640, height=400)
-        achart.width=1200
-        achart.height=400
+        # achart.properties(width=640, height=400)
+        achart.width = 1200
+        achart.height = 400
         achart.title = proforma_sequence
         # Define the footnote text
-        footnote_text = f"Neutral losses:" + str(annotation_settings['neutral_losses'])
+        footnote_text = f"Neutral losses:" + str(annotation_settings["neutral_losses"])
 
         # Create a text chart for the footnote
-        afootnote = alt.Chart(
-            {"values": [{"text": footnote_text}]}
-        ).mark_text(align='left', baseline='top', fontSize=10).encode(
-            text='text:N'
+        afootnote = (
+            alt.Chart({"values": [{"text": footnote_text}]})
+            .mark_text(align="left", baseline="top", fontSize=10)
+            .encode(text="text:N")
         )
 
         final_chart = alt.vconcat(achart, afootnote, spacing=5)
-        #altair_table = make_table_altair(msms_annot_table)
-
+        # altair_table = make_table_altair(msms_annot_table)
 
         outname = outname
-        fulloutname = outpath.joinpath(outname+".html")
+        fulloutname = outpath.joinpath(outname + ".html")
         if not os.path.exists(fulloutname):
             final_chart.interactive().save(fulloutname)
 
+
 def make_table_mpl(ax, table_data):
-    ax.axis('tight')
-    ax.axis('off')
-    #table = ax.table(cellText=table_data.values, colLabels=table_data.columns, loc='center', cellLoc='center')
-    table = ax.table(cellText=table_data.values, colLabels=table_data.columns, loc='center', cellLoc='center',
-    fontsize=12,
-                     colWidths=[0.1, 0.1, 0.1])
+    ax.axis("tight")
+    ax.axis("off")
+    # table = ax.table(cellText=table_data.values, colLabels=table_data.columns, loc='center', cellLoc='center')
+    table = ax.table(
+        cellText=table_data.values,
+        colLabels=table_data.columns,
+        loc="center",
+        cellLoc="center",
+        fontsize=12,
+        colWidths=[0.1, 0.1, 0.1],
+    )
     return table
+
 
 def make_table_altair(table_data):
     # not using this right now
     # Convert the DataFrame to a long format
-    table_data_long = table_data.melt(var_name='Column', value_name='Text')
+    table_data_long = table_data.melt(var_name="Column", value_name="Text")
 
     # Creating a "table" using text marks
-    text_chart = alt.Chart(table_data_long).mark_text(align='left', baseline='middle', dx=5).encode(
-        y=alt.Y('Column:N', axis=alt.Axis(title='')),
-        x=alt.X('row_number:O', axis=alt.Axis(title=''), sort=None),
-        text='Text:N',
-        detail='Column:N'
-    ).transform_window(
-        row_number='row_number()'
-    ).transform_filter(
-        alt.datum.Column != 'Column'  # Optional filter if you have a 'Column' column
+    text_chart = (
+        alt.Chart(table_data_long)
+        .mark_text(align="left", baseline="middle", dx=5)
+        .encode(
+            y=alt.Y("Column:N", axis=alt.Axis(title="")),
+            x=alt.X("row_number:O", axis=alt.Axis(title=""), sort=None),
+            text="Text:N",
+            detail="Column:N",
+        )
+        .transform_window(row_number="row_number()")
+        .transform_filter(
+            alt.datum.Column
+            != "Column"  # Optional filter if you have a 'Column' column
+        )
     )
     return text_chart
 
 
-
-
 @click.command()
-@click.option('--data-dir', help='data directory where the mzML and pepXML files are located')
-@click.option('--file', help='path to the target csv file that contains the survey scan number, fragment scan number, and spectrum file')
-@click.option('--sqlite-db', help='path to the sqlite database', default='scans.db')
-def main(data_dir,
-         file,
-         sqlite_db,
-         ):
+@click.option(
+    "--data-dir", help="data directory where the mzML and pepXML files are located"
+)
+@click.option(
+    "--file",
+    help="path to the target csv file that contains the survey scan number, fragment scan number, and spectrum file",
+)
+@click.option("--sqlite-db", help="path to the sqlite database", default="scans.db")
+def main(
+    data_dir,
+    file,
+    sqlite_db,
+):
     """
     :param file: path to the target csv file that contains the survey scan number, fragment scan number, and spectrum file
     percisely the columns are 'SurveyScanNumber', 'FragScanNumber', 'SpectrumFile'
     """
     # example
-    #file = "./Sites_AssigmentVerification.csv"
+    # file = "./Sites_AssigmentVerification.csv"
     df = pd.read_csv(file)
     df = df.head(1)
     check_cols(df)
 
     # move out later
-    list_of_dicts = df.to_dict(orient='records')
-
+    list_of_dicts = df.to_dict(orient="records")
 
     spec_file_basenames = df.SpectrumFile.unique()
 
@@ -261,7 +271,7 @@ def main(data_dir,
         session = db.get_global_session(engine_url)
 
     files = utils.get_files(spec_file_basenames, basepath=data_dir)
-    #scans = defaultdict(dict)
+    # scans = defaultdict(dict)
     filescans = utils.get_all_filescans(files, df, session=session)
 
     # all the scans are in this filescans dictionary object
@@ -280,16 +290,10 @@ def main(data_dir,
     # for each scan in each file, we can now handle the scan
     # for example
 
-
     # for ix, scan in filescans.items():
     #     #break
     #     handle_scan(scan)
 
 
-
-
-
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

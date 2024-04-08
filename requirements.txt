@@ -7,4 +7,3 @@ pandas
 matplotlib
 altair
 # SQLAlchemy
-

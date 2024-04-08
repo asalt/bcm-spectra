@@ -4,7 +4,8 @@ import os
 from collections import defaultdict
 import argparse
 import logging
-#import glob
+
+# import glob
 from pathlib import Path
 
 
@@ -23,11 +24,11 @@ logger.setLevel(logging.INFO)
 def get_files(base_filenames, basepath=".") -> dict:
     results = dict()
     for base_filename in base_filenames:
-        mzml_files = list(Path(basepath).rglob(f'{base_filename}*.mzML'))
-        pepxml_files = list(Path(basepath).rglob(f'{base_filename}*.pepXML'))
-        results[base_filename] = dict(mzml_files = mzml_files,
-                                      pepxml_files = pepxml_files)
+        mzml_files = list(Path(basepath).rglob(f"{base_filename}*.mzML"))
+        pepxml_files = list(Path(basepath).rglob(f"{base_filename}*.pepXML"))
+        results[base_filename] = dict(mzml_files=mzml_files, pepxml_files=pepxml_files)
     return results
+
 
 # def get_files(base_filenames: List[str], searchdir=".") -> Dict[str, Dict[str, List[Path]]]:
 #     results: Dict[str, Dict[str, List[Path]]] = {}
@@ -56,7 +57,6 @@ def get_filescans(mzml_file, pepxml_file, session=None, runobj=None, targetscans
         raise ValueError("session not provided")
         # session = db.get_session()
 
-
     if runobj is None:
         logger.warning("runobj not present")
 
@@ -64,7 +64,9 @@ def get_filescans(mzml_file, pepxml_file, session=None, runobj=None, targetscans
 
     for targetscan in targetscans:
         # scan = crud.get_scan_from_run_by_scan_number(runobj, targetscan)
-        scan = crud.get_scan_from_run_by_scan_number(session=session, run=runobj, scan_number=targetscan)
+        scan = crud.get_scan_from_run_by_scan_number(
+            session=session, run=runobj, scan_number=targetscan
+        )
         logger.info(f"looking for {targetscan} in db")
         if scan is not None:
             logger.info(f"fetching scan {targetscan} from db")
@@ -72,7 +74,9 @@ def get_filescans(mzml_file, pepxml_file, session=None, runobj=None, targetscans
 
     missing_scans = set(targetscans) - set(scans.keys())
 
-    missing_scans_res = parser.get_scans_from_files(mzml_file, pepxml_file, targetscans=missing_scans)
+    missing_scans_res = parser.get_scans_from_files(
+        mzml_file, pepxml_file, targetscans=missing_scans
+    )
     # this takes a while
     # no scans are saved to db until after all scans are processed
     # this could be changed / modified
@@ -86,18 +90,16 @@ def get_filescans(mzml_file, pepxml_file, session=None, runobj=None, targetscans
 
     # scans.update(missing_scans_res)
 
-    import ipdb; ipdb.set_trace()
     # add new scans to db
     for new_objs in new_obj_collection:
         for objname, obj in new_objs.items():
             if isinstance(obj, models.Base):
                 session.add(obj)
             else:
-                for o in obj: # this is for search hits.
+                for o in obj:  # this is for search hits.
                     session.add(o)
             #
     session.commit()
-
 
     return scans
 
@@ -110,9 +112,8 @@ def get_all_filescans(files, df, session: Session) -> dict:
 
         runobj = crud.get_or_create_run(filename=file, session=session)
 
-
-        mzml_files = files[file]['mzml_files']
-        pepxml_files = files[file]['pepxml_files']
+        mzml_files = files[file]["mzml_files"]
+        pepxml_files = files[file]["pepxml_files"]
         # TODO fix for if there is more than one file # or maybe not necessary if basefilename is unique by fraction (believe it should be)
         if len(mzml_files) == 0:
             logger.error(f"no mzml file found for {file}")
@@ -128,18 +129,21 @@ def get_all_filescans(files, df, session: Session) -> dict:
         mzml_file = mzml_files[0]
         pepxml_file = pepxml_files[0]
 
-        scaninfo = df[ df.SpectrumFile == file ]
+        scaninfo = df[df.SpectrumFile == file]
         targetscans = scaninfo.FragScanNumber.tolist()
 
-        scans_for_file = get_filescans(mzml_file, pepxml_file, session=session,
-        runobj=runobj,
-                                        targetscans=targetscans)
+        scans_for_file = get_filescans(
+            mzml_file,
+            pepxml_file,
+            session=session,
+            runobj=runobj,
+            targetscans=targetscans,
+        )
 
         filescans[file] = scans_for_file
 
-
-
     return filescans
+
 
 # def get_all_filescans(files, df) -> dict:
 #     for file in files.keys
