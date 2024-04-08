@@ -174,8 +174,9 @@ def prepare_ms2_objects(scan: dict, runobj=None):
     search_hit_objects = list()
     for search_hit in search_hits:
         search_hit_obj = process_search_hit(search_hit)
-        search_hit_obj.scan = scanobj
+        search_hit_obj = scanobj
         search_hit_obj.fragment = fragmentobj
+        search_hit_obj.run = runobj
         search_hit_objects.append(search_hit_obj)
 
     return {"scan": scanobj, "fragment": fragmentobj, "search_hits": search_hit_objects}

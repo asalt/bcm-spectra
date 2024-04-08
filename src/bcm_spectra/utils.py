@@ -74,12 +74,14 @@ def get_filescans(mzml_file, pepxml_file, session=None, runobj=None, targetscans
 
     missing_scans = set(targetscans) - set(scans.keys())
 
-    missing_scans_res = parser.get_scans_from_files(
-        mzml_file, pepxml_file, targetscans=missing_scans
-    )
-    # this takes a while
-    # no scans are saved to db until after all scans are processed
-    # this could be changed / modified
+    missing_scans_res = dict()
+    if len(missing_scans) > 0:
+        missing_scans_res = parser.get_scans_from_files(
+            mzml_file, pepxml_file, targetscans=missing_scans
+        )
+        # this takes a while
+        # no scans are saved to db until after all scans are processed
+        # this could be changed / modified
 
     new_obj_collection = list()
 
@@ -99,7 +101,10 @@ def get_filescans(mzml_file, pepxml_file, session=None, runobj=None, targetscans
                 for o in obj:  # this is for search hits.
                     session.add(o)
             #
+            if objname == "scan":  # we want to keep these and return them
+                scans[obj.scan_number] = obj
     session.commit()
+
 
     return scans
 

@@ -51,7 +51,11 @@ class Run(Base):
     __tablename__ = "runs"
     id = Column(Integer, primary_key=True)
     filename = Column(String, nullable=False)
-    # scans = relationship("Scan", backref="run")
+    scans = relationship("Scan", back_populates="run")
+
+    search_results = relationship("SearchResult", back_populates="run")
+    precursors = relationship("Precursor", back_populates="run")
+    fragments = relationship("Fragment", back_populates="run")
 
 
 class Scan(Base):
@@ -68,7 +72,13 @@ class Scan(Base):
     other_info = Column(JSON)
 
     run_id = Column(Integer, ForeignKey("runs.id"))
-    run = relationship("Run", backref="scans")
+    run = relationship("Run", back_populates="scans")
+
+    precursors = relationship("Precursor", back_populates="scan")
+    fragments = relationship("Fragment", back_populates="scan")
+
+    # search_results = relationship("SearchResult", back_populates="scan")
+
 
 
 class Precursor(Base):
@@ -79,8 +89,13 @@ class Precursor(Base):
     charge = Column(Integer)
 
     scan_id = Column(Integer, ForeignKey("scans.id"))
-    scan = relationship("Scan", backref="precursor")
-    # fragments = relationship("Fragment", backref="precursor")
+
+    scan = relationship("Scan", back_populates="precursors")
+
+    fragments = relationship("Fragment", back_populates="precursors")
+
+    run_id = Column(Integer, ForeignKey("runs.id"))
+    run = relationship("Run", back_populates="precursors")
 
 
 class Fragment(Base):
@@ -89,13 +104,16 @@ class Fragment(Base):
     # mz = Column(Float)
     # intensity = Column(Float)
 
-    precursor_id = Column(Integer, ForeignKey("precursors.id"))
-    precursor = relationship("Precursor", backref="fragments")
+    run_id = Column(Integer, ForeignKey("runs.id"))
+    run = relationship("Run", back_populates="fragments")
 
     scan_id = Column(Integer, ForeignKey("scans.id"))
-    scan = relationship("Scan", backref="fragments")
+    scan = relationship("Scan", back_populates="fragments")
 
-    # search_results = relationship("SearchResult", backref="fragments")
+    precursor_id = Column(Integer, ForeignKey("precursors.id"))
+    precursors = relationship("Precursor", back_populates="fragments")
+
+    search_results = relationship("SearchResult", back_populates="fragment")
 
 
 class SearchResult(Base):
@@ -111,7 +129,11 @@ class SearchResult(Base):
 
     # fragment_id = relationship("Fragment", backref="search_results")
 
-    scan = relationship("Scan", backref="search_results")
-    scan_id = Column(Integer, ForeignKey("scans.id"))
-    fragment = relationship("Fragment", backref="search_results")
+    run_id = Column(Integer, ForeignKey("runs.id"))
+    run = relationship("Run", back_populates="search_results")
+
+    # scan_id = Column(Integer, ForeignKey("scans.id"))
+    # scan = relationship("Scan", back_populates="search_results")
+
     fragment_id = Column(Integer, ForeignKey("fragments.id"))
+    fragment = relationship("Fragment", back_populates="search_results")

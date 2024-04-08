@@ -274,6 +274,14 @@ def main(
     # scans = defaultdict(dict)
     filescans = utils.get_all_filescans(files, df, session=session)
 
+
+
+    # this can be moved to test
+    assert all( not isinstance(q, dict) for v in filescans.values() for q in v.values() )
+
+    # scanobj = filescans[ list(filescans.keys())[0] ].get(43816)
+    # f1 = scanobj.fragments[0]
+
     # all the scans are in this filescans dictionary object
     # the structure is
     # filescans = {
