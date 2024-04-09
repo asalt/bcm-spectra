@@ -11,6 +11,7 @@ import pandas as pd
 from pyteomics import mzml, pepxml
 from pyteomics import mass
 import spectrum_utils
+import spectrum_utils.fragment_annotation
 import click
 
 import numpy as np
@@ -18,16 +19,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib import gridspec
-import spectrum_utils.spectrum as sus
-import spectrum_utils.plot as sup
-import spectrum_utils.iplot as supi
 from tqdm import tqdm
 import altair as alt
 
+# import spectrum_utils.spectrum as sus
+# import spectrum_utils.plot as sup
+# import spectrum_utils.iplot as supi
 
+from . import utils
 from .utils import get_files, get_filescans
 from . import db
-from . import utils
 from . import parser
 from . import plot
 
@@ -199,8 +200,6 @@ def handle_scan(scan: dict):
             final_chart.interactive().save(fulloutname)
 
 
-
-
 @click.command()
 @click.option(
     "--data-dir", help="data directory where the mzML and pepXML files are located"
@@ -240,26 +239,26 @@ def main(
     # scans = defaultdict(dict)
     filescans = utils.get_all_filescans(files, df, session=session)
 
-
-
     # this can be moved to test
-    assert all( not isinstance(q, dict) for v in filescans.values() for q in v.values() )
-
+    assert all(not isinstance(q, dict) for v in filescans.values() for q in v.values())
 
     for ix, scan_mapping in filescans.items():
         for scanno, scan in scan_mapping.items():
-            1+1
+            1 + 1
             # do something
             # handle_scan(scan)
-
 
             fragments = scan.fragments
             if len(fragments) == 0:
                 logger.warning(f"no fragments found for scan {scanno}")
                 continue
             fragment = fragments[0]
+
+            # something strange happening with the decoding. seems we must assume its float64 for it to decode correctly
             mz_array = np.frombuffer(fragment.scan.mz_array, dtype=np.float64)
-            intensity_array = np.frombuffer(fragment.scan.mz_array, dtype=np.float64)
+            intensity_array = np.frombuffer(
+                fragment.scan.intensity_array, dtype=np.float64
+            )
 
             assert len(mz_array) == len(intensity_array)
 
@@ -267,23 +266,34 @@ def main(
 
             rt = scan.rt_seconds / 60
 
-            msms = sus.MsmsSpectrum( identifier=_name, precursor_mz=fragment.precursor_mz,
-                                     precursor_charge=fragment.precursor_charge, mz=mz_array, intensity=intensity_array,
-                 retention_time=rt,
+            # TODO look in database for cache info?
+            msms = sus.MsmsSpectrum(
+                identifier=_name,
+                precursor_mz=fragment.precursor_mz,
+                precursor_charge=fragment.precursor_charge,
+                mz=mz_array,
+                intensity=intensity_array,
+                retention_time=rt,
             )
+            import ipdb
 
-                # peptide = peptide,
-                # modifications = modifications
-            #)
-            import ipdb; ipdb.set_trace()
+            ipdb.set_trace()
+
+            # peptide = peptide,
+            # modifications = modifications
+            # )
 
             for search_result in fragment.search_results:
                 proforma_sequence = search_result.proforma_sequence
                 hit_rank = search_result.rank
-                scoreinfo = search_result.score # dict
+                scoreinfo = search_result.score  # dict
                 # the "name" of the score may not be constant - not sure about others
-                search_score = scoreinfo.get("hyperscore", )
-                nextscore = scoreinfo.get("nextscore", )
+                search_score = scoreinfo.get(
+                    "hyperscore",
+                )
+                nextscore = scoreinfo.get(
+                    "nextscore",
+                )
                 mass_error = search_result.mass_error
 
                 info = (
@@ -291,9 +301,28 @@ def main(
                     f"hit rank: {hit_rank} massdiff: {mass_error:4f}\n"
                     f"search score: {search_score}"
                 )
-                msms.annotate_proforma(proforma_sequence, **annotation_settings)
-                fig = plot.make_spectrum_plot(msms, proforma_sequence=proforma_sequence,
-                                         additional_info=info)
+
+                spectrum_utils.fragment_annotation.get_theoretical_fragments(
+                    proforma_sequence, **annotation_settings
+                )
+
+
+                # proforma_parsed = proforma.parse(proforma_sequence)
+                # assert len(proforma_parsed) == 1
+                # res = spectrum_utils.fragment_annotation.get_theoretical_fragments(
+                #     proforma_parsed[0],
+                #     max_charge=2,
+                #     ion_types="by",
+                # )
+
+                _res = msms.annotate_proforma(proforma_sequence, **annotation_settings)
+
+                out = parser.extract_ion_annotation(msms)
+                # _res == msms, it returns same object. does this matter when we reannotate later?
+                # if so maybe we need to make a copy of the msms object
+                fig = plot.make_spectrum_plot(
+                    msms, proforma_sequence=proforma_sequence, additional_info=info
+                )
 
     # scanobj = filescans[ list(filescans.keys())[0] ].get(43816)
     # f1 = scanobj.fragments[0]

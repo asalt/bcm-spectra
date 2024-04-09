@@ -25,6 +25,10 @@ import spectrum_utils.iplot as supi
 from tqdm import tqdm
 import altair as alt
 
+
+from spectrum_utils import fragment_annotation as fa
+from spectrum_utils import proforma
+
 import numpy as np
 
 import matplotlib.pyplot as plt
@@ -138,11 +142,12 @@ def prepare_ms2_objects(scan: dict, runobj=None):
     mz_array = mzmlobj["m/z array"]
     mz_array = mz_array.astype(np.float64)  # keep both the same
     intensity_array = mzmlobj["intensity array"]
+    intensity_array = intensity_array.astype(np.float64)  # keep both the same
     _name = mzmlobj["id"]  # concat other info to make more comprehensive
     scanno = mzmlobj["index"] + 1  # concat other info to make more comprehensive
     start_scan = pepxmlobj["start_scan"]
 
-    rt_seconds = pepxmlobj['retention_time_sec']
+    rt_seconds = pepxmlobj["retention_time_sec"]
 
     assert scanno == start_scan
     #
@@ -170,7 +175,6 @@ def prepare_ms2_objects(scan: dict, runobj=None):
         run=runobj,
     )
 
-    import ipdb; ipdb.set_trace()
     fragmentobj = models.Fragment(
         id=scanno,
         run=runobj,
@@ -182,18 +186,22 @@ def prepare_ms2_objects(scan: dict, runobj=None):
 
     search_hits = pepxmlobj["search_hit"]
 
-    search_hit_objects = list()
+    search_hit_objects_and_friends = list()
     for search_hit in search_hits:
-        search_hit_obj = process_search_hit(search_hit)
+        search_hit_obj_and_friends = process_search_hit(search_hit)
+        search_hit_obj = search_hit_obj_and_friends["search_hit"]
         search_hit_obj.scan = scanobj
         search_hit_obj.fragment = fragmentobj
         search_hit_obj.run = runobj
-        search_hit_objects.append(search_hit_obj)
+        search_hit_objects_and_friends.append(search_hit_obj)
 
-    return {"scan": scanobj, "fragment": fragmentobj, "search_hits": search_hit_objects}
+    return {"scan": scanobj, "fragment": fragmentobj, "search_hits": search_hit_objects_and_friends}
 
 
 def process_search_hit(search_hit):
+    """
+    this also makes theoreticalannotation
+    """
 
     def get_massdiff():
         out = dict()
@@ -231,6 +239,7 @@ def process_search_hit(search_hit):
             mass_diff = massdiff_dict[i]
             proforma_sequence += f"[+{mass_diff:.4f}]"
 
+
     search_hit_obj = models.SearchResult(
         peptide_sequence=peptide,
         proforma_sequence=proforma_sequence,
@@ -241,7 +250,49 @@ def process_search_hit(search_hit):
         mass_diffs=massdiff_dict,
     )
 
-    return search_hit_obj
+    # ==========================================================
+    ##
+    # from spectrum_utils import fragment_annotation as fa, proforma, utils
+
+    proforma_parsed = proforma.parse(proforma_sequence)
+    if len(proforma_parsed) > 1:
+        raise ValueError("parsed proforma longer than 1 for some reason")
+    proforma_parsed = proforma_parsed[0]
+
+
+
+    # here is manually adding some common neutral losses that are most likely to be of interest
+    # I do not wish to calculate too many variations
+    common_neutral_losses = dict()
+    for key in ("NH3", "H2O", "H3PO4", "HPO3", "C2H5NOS", "C2H4O2S"):
+        common_neutral_losses[key] = fa._neutral_loss.get(key, None)
+
+    # TODO add ability to add more
+    theoretical_ions = spectrum_utils.fragment_annotation.get_theoretical_fragments(
+        proforma_parsed,
+        max_charge=2,
+        ion_types="by",
+        neutral_losses=common_neutral_losses,
+    )
+    df = pd.DataFrame(theoretical_ions)
+    df.columns = ["name", "mz",]
+    df['name'] = df['name'].astype(str)
+    df = df[ df.mz > 199 ]
+    df['ion_type'] = df['name'].apply(lambda x: x[0]) # this is actualy right but not very robust
+
+    ion_objects = list()
+    for ix, row in df.iterrows():
+        ionobj = models.TheoreticalIon(
+            mz=row['mz'],
+            ion_type=row['ion_type'],
+            search_hit=search_hit_obj,
+        )
+        ion_objects.append(ionobj)
+
+
+
+
+    return {"search_hit": search_hit_obj, "theoretical_ions": ion_objects}
 
 
 def old():

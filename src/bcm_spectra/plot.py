@@ -51,8 +51,7 @@ def make_table_altair(table_data):
     return text_chart
 
 
-
-def make_specutils_plot(msms, proforma_sequence='', additional_title=''):
+def make_specutils_plot(msms, proforma_sequence="", additional_title=""):
 
     fig = plt.figure(figsize=(14, 6))
     gs = gridspec.GridSpec(2, 1, height_ratios=[1, 1])

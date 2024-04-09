@@ -82,7 +82,6 @@ class Scan(Base):
     # search_results = relationship("SearchResult", back_populates="scan")
 
 
-
 class Precursor(Base):
     """
     TODO: this needs to be renamed to SurveyScan
@@ -90,6 +89,7 @@ class Precursor(Base):
     # that information is stored in the fragments table
     # this is for survey scans
     """
+
     __tablename__ = "precursors"
     id = Column(Integer, primary_key=True)
     mz = Column(Float)
@@ -149,3 +149,16 @@ class SearchResult(Base):
 
     fragment_id = Column(Integer, ForeignKey("fragments.id"))
     fragment = relationship("Fragment", back_populates="search_results")
+
+    theoretical_ions = relationship("TheoreticalIon", back_populates="search_hit")
+
+
+class TheoreticalIon(Base):
+    __tablename__ = "theoretical_ions"
+    id = Column(Integer, primary_key=True)
+    mz = Column(Float)
+    ion_type = Column(String)
+    charge = Column(Integer)
+
+    search_result_id = Column(Integer, ForeignKey("search_results.id"))
+    search_hit = relationship("SearchResult", back_populates="theoretical_ions")

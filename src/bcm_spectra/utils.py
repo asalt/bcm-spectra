@@ -8,6 +8,8 @@ import logging
 # import glob
 from pathlib import Path
 
+import collections.abc # for isinstance check of iterable
+
 
 import sqlalchemy
 from sqlalchemy.orm import Session
@@ -16,6 +18,8 @@ from . import parser
 from . import db
 from . import models
 from . import crud
+
+from spectrum_utils import fragment_annotation as fa, proforma #, utils
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -93,18 +97,28 @@ def get_filescans(mzml_file, pepxml_file, session=None, runobj=None, targetscans
     # scans.update(missing_scans_res)
 
     # add new scans to db
-    for new_objs in new_obj_collection:
-        for objname, obj in new_objs.items():
-            if isinstance(obj, models.Base):
-                session.add(obj)
-            else:
-                for o in obj:  # this is for search hits.
-                    session.add(o)
-            #
-            if objname == "scan":  # we want to keep these and return them
-                scans[obj.scan_number] = obj
-    session.commit()
+    import ipdb; ipdb.set_trace()
+    crud.commit_all_objects(new_obj_collection, session)
 
+    # for new_objs in new_obj_collection:
+    #     for objname, obj in new_objs.items():
+    #         if isinstance(obj, models.Base):
+    #             session.add(obj)
+    #         if objname == "scan":  # we want to keep these and return them
+    #             scans[obj.scan_number] = obj # these guys have links to everything we might need
+    #         elif isinstance(obj, collections.abc.Iterable) and not isinstance(obj, (str, bytes)):  # Handling any iterable object but excluding strings/bytes
+    #             for item in obj:
+    #                 if isinstance(item, models.Base):
+    #                     session.add(item)
+    #                 else:
+    #                     raise TypeError(f"Non-model object in iterable: {type(item).__name__}")
+    #         else:
+    #             raise TypeError(f"Unsupported type in new_obj_collection: {type(obj).__name__}")
+    #         else:
+    #             for o in obj:  # this is for search hits.
+    #                 session.add(o)
+
+    session.commit()
 
     return scans
 
