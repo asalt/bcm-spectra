@@ -64,7 +64,7 @@ def get_filescans(mzml_file, pepxml_file, session=None, runobj=None, targetscans
     if runobj is None:
         logger.warning("runobj not present")
 
-    scans = dict()
+    scans = list()
 
     for targetscan in targetscans:
         # scan = crud.get_scan_from_run_by_scan_number(runobj, targetscan)
@@ -74,11 +74,13 @@ def get_filescans(mzml_file, pepxml_file, session=None, runobj=None, targetscans
         logger.info(f"looking for {targetscan} in db")
         if scan is not None:
             logger.info(f"fetching scan {targetscan} from db")
-            scans[targetscan] = scan
+            scans.append(scan)
+            # scans[targetscan] = scan
 
-    missing_scans = set(targetscans) - set(scans.keys())
+    missing_scans = targetscans
+    if len(scans) > 0:
+        missing_scans = set(targetscans) - set([x.scan_number for x in scans])
 
-    missing_scans_res = dict()
     if len(missing_scans) > 0:
         missing_scans_res = parser.get_scans_from_files(
             mzml_file, pepxml_file, targetscans=missing_scans
@@ -87,18 +89,26 @@ def get_filescans(mzml_file, pepxml_file, session=None, runobj=None, targetscans
         # no scans are saved to db until after all scans are processed
         # this could be changed / modified
 
-    new_obj_collection = list()
+        new_obj_collection = list()
 
-    for scan in missing_scans_res.values():
-        # actually we make new Scan objects here
-        new_objs = parser.prepare_ms2_objects(scan, runobj=runobj)
-        new_obj_collection.append(new_objs)
+        for scan in missing_scans_res.values():
+            # actually we make new Scan objects here
+            new_objs = parser.prepare_ms2_objects(scan, runobj=runobj)
+            new_obj_collection.append(new_objs)
 
+        crud.commit_all_objects(new_obj_collection, session)
+
+        new_scans = [ x["scan"] for x in new_obj_collection ]
+
+        scans = [ *scans, *new_scans ]
     # scans.update(missing_scans_res)
 
     # add new scans to db
     import ipdb; ipdb.set_trace()
-    crud.commit_all_objects(new_obj_collection, session)
+    # get the scans from the new_obj_collection
+    # scans = new_obj_collection["scan"]
+
+
 
     # for new_objs in new_obj_collection:
     #     for objname, obj in new_objs.items():
@@ -117,8 +127,7 @@ def get_filescans(mzml_file, pepxml_file, session=None, runobj=None, targetscans
     #         else:
     #             for o in obj:  # this is for search hits.
     #                 session.add(o)
-
-    session.commit()
+    # session.commit()
 
     return scans
 

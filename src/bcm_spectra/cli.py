@@ -12,6 +12,7 @@ from pyteomics import mzml, pepxml
 from pyteomics import mass
 import spectrum_utils
 import spectrum_utils.fragment_annotation
+import spectrum_utils.spectrum as sus
 import click
 
 import numpy as np
@@ -22,7 +23,6 @@ from matplotlib import gridspec
 from tqdm import tqdm
 import altair as alt
 
-# import spectrum_utils.spectrum as sus
 # import spectrum_utils.plot as sup
 # import spectrum_utils.iplot as supi
 
@@ -240,13 +240,14 @@ def main(
     filescans = utils.get_all_filescans(files, df, session=session)
 
     # this can be moved to test
-    assert all(not isinstance(q, dict) for v in filescans.values() for q in v.values())
+    # assert all(not isinstance(q, dict) for v in filescans.values() for q in v.values())
 
-    for ix, scan_mapping in filescans.items():
-        for scanno, scan in scan_mapping.items():
-            1 + 1
+    for ix, scans in filescans.items():
+        import ipdb; ipdb.set_trace()
+        for scan in scans:
             # do something
             # handle_scan(scan)
+            scanno = scan.scan_number
 
             fragments = scan.fragments
             if len(fragments) == 0:
@@ -266,7 +267,7 @@ def main(
 
             rt = scan.rt_seconds / 60
 
-            # TODO look in database for cache info?
+            # # TODO look in database for cache info?
             msms = sus.MsmsSpectrum(
                 identifier=_name,
                 precursor_mz=fragment.precursor_mz,
@@ -275,9 +276,6 @@ def main(
                 intensity=intensity_array,
                 retention_time=rt,
             )
-            import ipdb
-
-            ipdb.set_trace()
 
             # peptide = peptide,
             # modifications = modifications
@@ -302,10 +300,6 @@ def main(
                     f"search score: {search_score}"
                 )
 
-                spectrum_utils.fragment_annotation.get_theoretical_fragments(
-                    proforma_sequence, **annotation_settings
-                )
-
 
                 # proforma_parsed = proforma.parse(proforma_sequence)
                 # assert len(proforma_parsed) == 1
@@ -320,7 +314,7 @@ def main(
                 out = parser.extract_ion_annotation(msms)
                 # _res == msms, it returns same object. does this matter when we reannotate later?
                 # if so maybe we need to make a copy of the msms object
-                fig = plot.make_spectrum_plot(
+                fig = plot.make_specutils_plot(
                     msms, proforma_sequence=proforma_sequence, additional_info=info
                 )
 

@@ -51,7 +51,7 @@ def make_table_altair(table_data):
     return text_chart
 
 
-def make_specutils_plot(msms, proforma_sequence="", additional_title=""):
+def make_specutils_plot(msms, proforma_sequence="", additional_info=""):
 
     fig = plt.figure(figsize=(14, 6))
     gs = gridspec.GridSpec(2, 1, height_ratios=[1, 1])
@@ -61,7 +61,7 @@ def make_specutils_plot(msms, proforma_sequence="", additional_title=""):
     sup.mass_errors(msms, ax=ax2, plot_unknown=False)
 
     fig.suptitle(proforma_sequence, fontsize=16, weight="bold", color="black")
-    fig.axes[0].title.set_text(additional_title)
+    fig.axes[0].title.set_text(additional_info)
 
     # table.set_fontsize(12)
 
